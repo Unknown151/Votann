@@ -10,7 +10,7 @@
     "escalationAfter": 1,
     "tiers": [
       [{ "models": 1, "points": 250 }],
-      [{ "models": 1, "points": 265 }]
+      [{ "models": 1, "points": 270 }]
     ]
   },
   "stats": {
