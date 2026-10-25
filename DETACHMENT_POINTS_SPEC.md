@@ -41,7 +41,9 @@ const DETACHMENTS = {
   'detachment-id': {
     name: 'Detachment Name',
     dp: 2,                          // DP cost (typically 1–3)
-    category: 'Priority Assets',    // key into DETACHMENT_CATEGORIES
+    category: 'Priority Assets',    // key into DETACHMENT_CATEGORIES; may also be an
+                                    // array when a detachment has two dispositions,
+                                    // e.g. ['Priority Assets', 'Reconnaissance']
     unique: 'group-key' | null,     // only one active detachment per non-null group
     ruleId: 'rule-id',              // id used to open the rule popup
     ruleType: 'Detachment Rule — Name',
@@ -215,7 +217,8 @@ else if (DETACHMENTS[packed.d])   selectedDetachments = [packed.d];
 
 **Selector = a grid of cards, one per detachment** (sort by name for a stable layout).
 Each card shows:
-- a **category-coloured bar** (from `DETACHMENT_CATEGORIES`),
+- a **category-coloured bar** (from `DETACHMENT_CATEGORIES`) — one bar per disposition, since
+  a detachment may carry two,
 - the **name**,
 - its **DP cost** (prefix a ✓ when active),
 - a **"Unique: group"** tag when `unique` is set.

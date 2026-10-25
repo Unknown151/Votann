@@ -614,7 +614,7 @@
             </div>
         </div>
     </header>
-    <div class="version-line" id="version-line">11th Edition - Version 0.5.9</div>
+    <div class="version-line" id="version-line">11th Edition - Version 0.6.0</div>
     <main class="container">
         <div id="units-tab" class="tab-content active" role="tabpanel" aria-label="Army view">
             <div id="units-container"><div class="loading">Loading units...</div></div>
@@ -920,7 +920,7 @@ const DETACHMENTS = {
     'hearthband': {
         name: 'Hearthband',
         dp: 3,
-        category: 'Priority Assets',
+        category: ['Priority Assets', 'Reconnaissance'],
         unique: 'hearthband',
         ruleId: 'prioritised-efficiency',
         ruleType: 'Detachment Rule — Hearthband',
@@ -1018,6 +1018,11 @@ const DETACHMENT_CATEGORIES = {
     'Reconnaissance': '#2f8f8f',
     'Priority Assets': '#c2922b'
 };
+// A detachment's `category` may be a single disposition or several — always read it as a list.
+function detachmentCategories(d) {
+    if (!d || !d.category) return [];
+    return Array.isArray(d.category) ? d.category : [d.category];
+}
 // One or more detachments may be active at once, limited by the DP budget.
 let selectedDetachments = ['hearthband'];
 
@@ -1064,7 +1069,7 @@ function showDetachmentRules() {
         mdesc.innerHTML = '<p>No detachments selected. Pick detachments in the Builder tab — you have 3 Detachment Points to spend.</p>';
     } else {
         mdesc.innerHTML = active.map(d =>
-            `<div style="margin-bottom:1rem"><strong>${escHtml(d.name)}</strong> <span style="color:var(--text3);font-size:.85em">(${d.dp} DP · ${escHtml(d.category)})</span><br>${d.ruleDescription}</div>`
+            `<div style="margin-bottom:1rem"><strong>${escHtml(d.name)}</strong> <span style="color:var(--text3);font-size:.85em">(${d.dp} DP · ${escHtml(detachmentCategories(d).join(' · '))})</span><br>${d.ruleDescription}</div>`
         ).join('');
     }
     modal.classList.add('show');
@@ -2526,11 +2531,13 @@ function renderDetachmentSelector() {
     const cards = entries.map(([id, d]) => {
         const active = isDetachmentActive(id);
         const blocked = !active && !canAddDetachment(id);
-        const color = DETACHMENT_CATEGORIES[d.category] || 'var(--border)';
+        const bars = detachmentCategories(d).map(cat =>
+            `<div class="dp-card-bar" style="background:${DETACHMENT_CATEGORIES[cat] || 'var(--border)'}">${escHtml(cat)}</div>`
+        ).join('');
         return `
             <button class="dp-card ${active ? 'active' : ''} ${blocked ? 'blocked' : ''}"
                     onclick="toggleDetachment('${id}')" ${blocked ? 'aria-disabled="true"' : ''}>
-                <div class="dp-card-bar" style="background:${color}">${escHtml(d.category)}</div>
+                ${bars}
                 <div class="dp-card-body">
                     <span class="dp-card-name">${escHtml(d.name)}</span>
                     <span class="dp-card-dp">${active ? '✓ ' : ''}${d.dp} DP</span>
