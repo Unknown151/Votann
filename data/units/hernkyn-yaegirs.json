@@ -19,6 +19,7 @@
     "ranged": [
       {
         "name": "APM launcher",
+        "count": 0,
         "range": "24\"",
         "a": "1",
         "bs": "4+",
@@ -30,6 +31,7 @@
       },
       {
         "name": "Bolt revolver",
+        "count": 0,
         "range": "12\"",
         "a": "1",
         "bs": "4+",
@@ -41,6 +43,7 @@
       },
       {
         "name": "Bolt shotgun",
+        "count": 10,
         "range": "18\"",
         "a": "2",
         "bs": "4+",
@@ -52,6 +55,7 @@
       },
       {
         "name": "Magna-coil rifle",
+        "count": 0,
         "range": "24\"",
         "a": "1",
         "bs": "4+",
@@ -65,6 +69,7 @@
     "melee": [
       {
         "name": "Close combat weapon",
+        "count": 10,
         "a": "1",
         "ws": "4+",
         "s": "4",
@@ -75,6 +80,7 @@
       },
       {
         "name": "Plasma knife",
+        "count": 0,
         "a": "2",
         "ws": "4+",
         "s": "4",

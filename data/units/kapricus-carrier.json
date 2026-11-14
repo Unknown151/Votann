@@ -61,7 +61,7 @@
       }
     ]
   },
-  "abilities": ["scanner-uplinks"],
+  "abilities": ["scanner-uplinks", "kapricus-carrier-transport"],
   "coreAbilities": ["deadly-demise-1", "firing-deck-5", "scouts-9"],
   "wargear": ["smoke-launcher"],
   "wargearOptions": [

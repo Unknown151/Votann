@@ -614,7 +614,7 @@
             </div>
         </div>
     </header>
-    <div class="version-line" id="version-line">11th Edition - Version 0.6.0</div>
+    <div class="version-line" id="version-line">11th Edition - Version 0.7.0</div>
     <main class="container">
         <div id="units-tab" class="tab-content active" role="tabpanel" aria-label="Army view">
             <div id="units-container"><div class="loading">Loading units...</div></div>
@@ -1527,13 +1527,15 @@ function exportArmyText() {
 
             lines.push(unitBlock(leaderInst, leaderPts, attachedNote));
             if (isSplitActive(instance)) {
-                lines.push(unitBlock({ ...makeSplitHalf(instance, 'a'), enhancementId: null }, bodyguardPts, ' - Split A (Sagitaur Transport)'));
+                const tLabel = splitRuleFor(instance.unitId)?.label || 'Transport';
+                lines.push(unitBlock({ ...makeSplitHalf(instance, 'a'), enhancementId: null }, bodyguardPts, ` - Split A (${tLabel} Transport)`));
                 lines.push(unitBlock(makeSplitHalf(instance, 'b'), 0, ' - Split B (points included above)'));
             } else {
                 lines.push(unitBlock({ ...instance, enhancementId: null }, bodyguardPts));
             }
         } else if (isSplitActive(instance)) {
-            lines.push(unitBlock({ ...makeSplitHalf(instance, 'a'), enhancementId: null }, calculateInstancePoints(instance), ' - Split A (Sagitaur Transport)'));
+            const tLabel = splitRuleFor(instance.unitId)?.label || 'Transport';
+            lines.push(unitBlock({ ...makeSplitHalf(instance, 'a'), enhancementId: null }, calculateInstancePoints(instance), ` - Split A (${tLabel} Transport)`));
             lines.push(unitBlock(makeSplitHalf(instance, 'b'), 0, ' - Split B (points included above)'));
         } else {
             lines.push(unitBlock(instance, calculateInstancePoints(instance)));
@@ -2672,15 +2674,18 @@ function renderArmyInstance(instance) {
         `;
     }
 
-    // Sagitaur split toggle (Hearthkyn Warriors, only when a Sagitaur is in the list)
-    if (instance.unitId === 'hearthkyn-warriors' && armyHasSagitaur()) {
+    // Transport split toggle (only when the enabling transport is in the list)
+    if (canSplitUnit(instance)) {
+        const splitRule = splitRuleFor(instance.unitId);
+        const n = instance.modelCount || unit.models || 10;
+        const sizes = n % 2 === 0 ? `2×${n / 2}` : `${Math.ceil(n / 2)}+${Math.floor(n / 2)}`;
         bodyContent += `
-            <div class="config-label">Sagitaur Transport</div>
+            <div class="config-label">${escHtml(splitRule.label)} Transport</div>
             <div class="wargear-checkboxes">
                 <label class="wargear-checkbox ${instance.split ? 'checked' : ''}">
                     <input type="checkbox" ${instance.split ? 'checked' : ''}
                         onchange="setInstanceSplit('${instance.instanceId}', this.checked)">
-                    <span>Split into 2×5 (one half starts embarked)</span>
+                    <span>Split into ${sizes} (one half starts embarked)</span>
                 </label>
             </div>
         `;
@@ -3436,13 +3441,20 @@ function closeUnitPicker() {
 }
 
 // Build active army from army list
-// --- Sagitaur split (Hearthkyn Warriors may split into two halves at Declare Battle Formations) ---
-function armyHasSagitaur() {
-    return armyList.some(i => i.unitId === 'sagitaur');
+// --- Transport splits (a unit may be split into two at Declare Battle Formations) ---
+// splittable unit id → the transport whose ability enables it
+const SPLIT_TRANSPORTS = {
+    'hearthkyn-warriors': { transport: 'sagitaur', label: 'Sagitaur' },
+    'hernkyn-yaegirs': { transport: 'kapricus-carrier', label: 'Kapricus Carrier' }
+};
+function splitRuleFor(unitId) { return SPLIT_TRANSPORTS[unitId] || null; }
+// The split is only offered while the enabling transport is actually in the list
+function canSplitUnit(instance) {
+    const rule = splitRuleFor(instance.unitId);
+    return !!rule && armyList.some(i => i.unitId === rule.transport);
 }
-// The split only applies while a Sagitaur is actually in the list
 function isSplitActive(instance) {
-    return !!instance.split && instance.unitId === 'hearthkyn-warriors' && armyHasSagitaur();
+    return !!instance.split && canSplitUnit(instance);
 }
 function setInstanceSplit(instanceId, on) {
     const instance = armyList.find(i => i.instanceId === instanceId);
@@ -3692,7 +3704,7 @@ function buildActiveArmy() {
         if (isSplitActive(instance)) {
             ['a', 'b'].forEach(half => {
                 const inst = makeSplitHalf(instance, half);
-                const label = `Split ${half.toUpperCase()}${inst.hasTheyn ? ' • Theyn' : ''} (Sagitaur)`;
+                const label = `Split ${half.toUpperCase()}${inst.hasTheyn ? ' • Theyn' : ''} (${splitRuleFor(instance.unitId)?.label || 'Transport'})`;
                 if (inst.leaderId && units[inst.leaderId]) {
                     const leader = units[inst.leaderId];
                     activeUnits.push({
