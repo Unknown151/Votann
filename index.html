@@ -614,7 +614,7 @@
             </div>
         </div>
     </header>
-    <div class="version-line" id="version-line">11th Edition - Version 0.7.0</div>
+    <div class="version-line" id="version-line">11th Edition - Version 0.8.0</div>
     <main class="container">
         <div id="units-tab" class="tab-content active" role="tabpanel" aria-label="Army view">
             <div id="units-container"><div class="loading">Loading units...</div></div>
@@ -1414,6 +1414,7 @@ function packArmy() {
             if (inst.split) p.sp = 1;
             if (inst.split && inst.splitWeapons) p.sw = inst.splitWeapons;
             if (inst.hkWargear) p.hk = inst.hkWargear;
+            if (inst.ygWargear) p.yg = inst.ygWargear;
             if (inst.selectedWargear?.length) p.g = inst.selectedWargear;
             if (inst.leaderWargear?.length) p.lw = inst.leaderWargear;
             // Only store weapon states that differ from the unit default
@@ -1461,7 +1462,8 @@ function unpackArmy(packed) {
             selectedWargear: p.g || [],
             split: !!p.sp,
             splitWeapons: p.sw || null,
-            hkWargear: p.hk || null
+            hkWargear: p.hk || null,
+            ygWargear: p.yg || null
         };
     });
 }
@@ -1689,7 +1691,8 @@ function duplicateUnit(instanceId) {
         selectedWargear: [...source.selectedWargear],
         split: source.split || false,
         splitWeapons: source.splitWeapons ? JSON.parse(JSON.stringify(source.splitWeapons)) : null,
-        hkWargear: source.hkWargear ? JSON.parse(JSON.stringify(source.hkWargear)) : null
+        hkWargear: source.hkWargear ? JSON.parse(JSON.stringify(source.hkWargear)) : null,
+        ygWargear: source.ygWargear ? JSON.parse(JSON.stringify(source.ygWargear)) : null
     };
     // Insert clone right after the source
     const idx = armyList.indexOf(source);
@@ -2647,7 +2650,7 @@ function renderConfigurationTab() {
 function renderArmyInstance(instance) {
     const unit = units[instance.unitId];
     if (!unit) return '';
-    ensureHkWargear(instance);   // keep derived Hearthkyn loadout current for the summary line
+    ensureGuidedWargear(instance);   // keep derived guided-wargear loadouts current for the summary line
 
     const isExpanded = configExpandedCards[instance.instanceId];
     const isLeader = unit.isLeader;
@@ -2720,6 +2723,8 @@ function renderArmyInstance(instance) {
     // Weapons section — Hearthkyn use the guided wargear panel; split units configure each half
     if (instance.unitId === 'hearthkyn-warriors') {
         bodyContent += renderHearthkynWargearPanel(instance);
+    } else if (instance.unitId === 'hernkyn-yaegirs') {
+        bodyContent += renderYaegirWargearPanel(instance);
     } else if (isSplitActive(instance)) {
         ensureSplitWeapons(instance);
         bodyContent += renderInstanceWeaponSelector(instance, 'a');
@@ -3690,6 +3695,149 @@ function renderHearthkynWargearPanel(instance) {
     return html;
 }
 
+// --- Hernkyn Yaegirs guided wargear ---
+// Datasheet options: any number may swap their bolt shotgun for a bolt revolver + plasma knife
+// (a pair); one model may take a magna-coil rifle and another an APM launcher. Every model keeps
+// its close combat weapon. Like the Hearthkyn panel, weapon counts are DERIVED from these slots.
+function defaultYgWargear() {
+    return { swaps: 0, magna: false, apm: false, magnaIn: 'a', apmIn: 'b', swapsA: 0 };
+}
+function ensureYgWargear(instance) {
+    if (instance.unitId !== 'hernkyn-yaegirs') return;
+    if (!instance.ygWargear) {
+        const wg = defaultYgWargear();
+        // Migrate a free-form loadout. Lists saved before weapon counts existed have every
+        // weapon at count 1, which means nothing — those start from the datasheet default.
+        const w = instance.weapons || {};
+        const counts = Object.values(w).map(v => v.count || 0);
+        const legacy = counts.length && counts.every(c => c <= 1);
+        if (!legacy) {
+            const n = k => (w[k]?.equipped ? (w[k].count || 0) : 0);
+            wg.magna = n('magna-coil-rifle') > 0;
+            wg.apm = n('apm-launcher') > 0;
+            wg.swaps = Math.min(n('bolt-revolver'), n('plasma-knife'));
+        }
+        instance.ygWargear = wg;
+    }
+    deriveYaegirWeapons(instance);
+}
+// Recompute instance.weapons and instance.splitWeapons from the wargear slots
+function deriveYaegirWeapons(instance) {
+    const unit = units['hernkyn-yaegirs'];
+    if (!unit) return;
+    const wg = instance.ygWargear;
+    const total = instance.modelCount || unit.models || 10;
+    const specials = (wg.magna ? 1 : 0) + (wg.apm ? 1 : 0);
+    wg.swaps = Math.max(0, Math.min(wg.swaps || 0, total - specials));
+
+    const allWeapons = [...(unit.weapons.ranged || []), ...(unit.weapons.melee || [])];
+    const loadout = (models, swapsN, magnaHere, apmHere) => {
+        const specialsHere = (magnaHere ? 1 : 0) + (apmHere ? 1 : 0);
+        const c = {
+            'bolt-shotgun': Math.max(0, models - specialsHere - swapsN),
+            'bolt-revolver': swapsN,
+            'plasma-knife': swapsN,
+            'magna-coil-rifle': magnaHere ? 1 : 0,
+            'apm-launcher': apmHere ? 1 : 0,
+            'close-combat-weapon': models
+        };
+        const out = {};
+        allWeapons.forEach(x => {
+            const key = generateWeaponKey(x);
+            const n = c[key] || 0;
+            out[key] = { equipped: n > 0, count: n };
+        });
+        return out;
+    };
+
+    instance.weapons = loadout(total, wg.swaps, wg.magna, wg.apm);
+
+    // Per-half assignment — clamp the swaps so each half stays within its model count
+    const modelsA = Math.ceil(total / 2), modelsB = Math.floor(total / 2);
+    const magnaA = wg.magna && wg.magnaIn !== 'b';
+    const apmA = wg.apm && wg.apmIn !== 'b';
+    const capA = modelsA - (magnaA ? 1 : 0) - (apmA ? 1 : 0);
+    const capB = modelsB - (wg.magna && !magnaA ? 1 : 0) - (wg.apm && !apmA ? 1 : 0);
+    let sA = Math.max(0, Math.min(wg.swapsA || 0, wg.swaps, capA));
+    sA = Math.max(0, Math.min(Math.max(sA, wg.swaps - capB), wg.swaps));
+    wg.swapsA = sA;
+
+    instance.splitWeapons = {
+        a: loadout(modelsA, sA, magnaA, apmA),
+        b: loadout(modelsB, wg.swaps - sA, wg.magna && !magnaA, wg.apm && !apmA)
+    };
+}
+function setYgWargear(instanceId, field, value) {
+    const instance = armyList.find(i => i.instanceId === instanceId);
+    if (!instance) return;
+    ensureYgWargear(instance);
+    instance.ygWargear[field] = value;
+    deriveYaegirWeapons(instance);
+    saveArmyList();
+    renderConfigurationTab();
+    renderUnits();
+}
+function adjustYgWargear(instanceId, field, delta) {
+    const instance = armyList.find(i => i.instanceId === instanceId);
+    if (!instance) return;
+    ensureYgWargear(instance);
+    instance.ygWargear[field] = (instance.ygWargear[field] || 0) + delta;
+    deriveYaegirWeapons(instance);   // clamps to legal range
+    saveArmyList();
+    renderConfigurationTab();
+    renderUnits();
+}
+function renderYaegirWargearPanel(instance) {
+    ensureYgWargear(instance);
+    const wg = instance.ygWargear;
+    const total = instance.modelCount || 10;
+    const specials = (wg.magna ? 1 : 0) + (wg.apm ? 1 : 0);
+    const id = instance.instanceId;
+
+    const stepper = (label, field, val, max) => `
+        <div class="model-count-row">
+            <span class="model-count-label">${label}</span>
+            <button class="weapon-count-btn" onclick="event.preventDefault();adjustYgWargear('${id}','${field}',-1)">−</button>
+            <span class="weapon-count-display">${val}</span>
+            <button class="weapon-count-btn" onclick="event.preventDefault();adjustYgWargear('${id}','${field}',1)">+</button>
+            <span class="hk-max-hint">max ${max}</span>
+        </div>`;
+    const toggle = (field, label) => `
+        <div class="wargear-checkboxes"><label class="wargear-checkbox ${wg[field] ? 'checked' : ''}">
+            <input type="checkbox" ${wg[field] ? 'checked' : ''} onchange="setYgWargear('${id}','${field}',this.checked)">
+            <span>${label}</span></label></div>`;
+
+    let html = `<div class="config-label">Wargear Options</div>`;
+    html += stepper('Revolver + plasma knife:', 'swaps', wg.swaps, total - specials);
+    html += toggle('magna', 'Magna-coil rifle (1 Yaegir)');
+    html += toggle('apm', 'APM launcher (1 Yaegir)');
+
+    const unit = units[instance.unitId];
+    const parts = summarizeWeaponEntries(unit, instance.weapons).map(e => `${e.count}× ${e.name}`);
+    html += `<div class="hk-derived">${escHtml(parts.join(' · '))}</div>`;
+
+    // Split assignment: which half gets each special weapon, and how many swaps go to half A
+    if (isSplitActive(instance)) {
+        const abSelect = (field, val) => `
+            <select class="leader-select hk-ab" onchange="setYgWargear('${id}','${field}',this.value)">
+                <option value="a" ${val !== 'b' ? 'selected' : ''}>Half A</option>
+                <option value="b" ${val === 'b' ? 'selected' : ''}>Half B</option>
+            </select>`;
+        html += `<div class="config-label">Split Assignment</div>`;
+        if (wg.magna) html += `<div class="hk-row"><span class="hk-row-label">Magna-coil rifle</span>${abSelect('magnaIn', wg.magnaIn)}</div>`;
+        if (wg.apm) html += `<div class="hk-row"><span class="hk-row-label">APM launcher</span>${abSelect('apmIn', wg.apmIn)}</div>`;
+        if (wg.swaps > 0) html += stepper('Revolver + knife in Half A:', 'swapsA', wg.swapsA, wg.swaps);
+        html += `<div class="hk-derived">${escHtml(hkHalfSummary(instance, 'a'))}<br>${escHtml(hkHalfSummary(instance, 'b'))}</div>`;
+    }
+    return html;
+}
+
+// Keep every guided-wargear unit's derived loadout current
+function ensureGuidedWargear(instance) {
+    ensureHkWargear(instance);
+    ensureYgWargear(instance);
+}
+
 function buildActiveArmy() {
     const activeUnits = [];
 
@@ -3697,8 +3845,8 @@ function buildActiveArmy() {
         const unit = units[instance.unitId];
         if (!unit) return;
 
-        // Hearthkyn loadouts (incl. split halves) derive from their wargear slots
-        ensureHkWargear(instance);
+        // Hearthkyn/Yaegir loadouts (incl. split halves) derive from their wargear slots
+        ensureGuidedWargear(instance);
 
         // Split Hearthkyn Warriors render as two half-cards (A carries any leader/enhancement)
         if (isSplitActive(instance)) {

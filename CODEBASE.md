@@ -589,3 +589,13 @@ knives, Theyn ranged/melee choices). The slots live in `instance.hkWargear` (pac
 migrates old free-form loadouts). When the Sagitaur split is active, extra "Split
 Assignment" controls choose which half gets the Theyn, each special, and how many ion
 blasters/knives go to half A — all clamped to each half's warrior count.
+
+### Hernkyn Yaegirs guided wargear
+Same pattern for Yaegirs: `renderYaegirWargearPanel(instance)` offers a "revolver +
+plasma knife" swap stepper plus magna-coil rifle / APM launcher toggles (each special
+replaces a bolt shotgun; swaps are clamped to models minus specials). Choices live in
+`instance.ygWargear` (packed as `yg`), and `deriveYaegirWeapons()` rebuilds
+`instance.weapons` and `instance.splitWeapons`. With the Kapricus Carrier split active,
+"Split Assignment" picks the half for each special and how many swaps go to half A
+(clamped so half B always fits the remainder). `ensureGuidedWargear()` runs both the
+Hearthkyn and Yaegir ensure/derive steps.
